@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pakistan Economic Census — District Dashboard</title>
+<link rel="stylesheet" href="assets/leaflet.css">
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#ffffff; --ink:#1c2733; --muted:#64748b;
+    --accent:#0f766e; --line:#e2e8f0;
+    --punjab:#1b9e77; --sindh:#d95f02; --kpk:#7570b3; --baloch:#e7298a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:#0b3d3a;color:#fff;padding:14px 26px;display:flex;flex-wrap:wrap;align-items:center;gap:18px}
+  header h1{font-size:19px;margin:0;font-weight:600}
+  header .sub{font-size:12px;opacity:.75}
+  .kpis{display:flex;gap:26px;margin-left:auto;flex-wrap:wrap}
+  .kpi{text-align:right}
+  .kpi .v{font-size:19px;font-weight:700}
+  .kpi .l{font-size:11px;opacity:.75}
+  nav{background:#fff;border-bottom:1px solid var(--line);padding:0 26px;display:flex;gap:4px}
+  nav button{border:none;background:none;padding:13px 18px;font-size:14px;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;font-weight:600}
+  nav button.active{color:var(--accent);border-bottom-color:var(--accent)}
+  main{padding:18px 26px;max-width:1500px;margin:0 auto}
+  .page{display:none}
+  .page.show{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+  .card h3{margin:0 0 10px;font-size:14px;font-weight:700;color:#334155}
+  .controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+  .ctl label{display:block;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+  select{padding:7px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;background:#fff;min-width:150px;max-width:330px}
+  .seg{display:inline-flex;border:1px solid #cbd5e1;border-radius:7px;overflow:hidden}
+  .seg button{border:none;background:#fff;padding:7px 13px;font-size:13px;cursor:pointer;color:var(--muted)}
+  .seg button.on{background:var(--accent);color:#fff}
+  .maprow{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px}
+  @media (max-width:1100px){.maprow{grid-template-columns:1fr}}
+  #map{height:640px;border-radius:8px;background:#dfe9f0}
+  .leaflet-container{background:#dfe9f0;font:inherit}
+  .legend{background:#fff;padding:9px 11px;border-radius:8px;box-shadow:0 1px 5px rgba(0,0,0,.25);font-size:11px;line-height:17px}
+  .legend i{width:14px;height:14px;display:inline-block;vertical-align:-2px;margin-right:6px;border:1px solid rgba(0,0,0,.15)}
+  .chart{width:100%}
+  .note{font-size:11.5px;color:var(--muted);margin-top:8px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:1100px){.grid2{grid-template-columns:1fr}}
+  .cards4{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .stat .v{font-size:21px;font-weight:700;color:var(--accent)}
+  .stat .l{font-size:11.5px;color:var(--muted);margin-top:2px}
+  table.data{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.data th{background:#f1f5f9;text-align:right;padding:7px 9px;position:sticky;top:0;cursor:default}
+  table.data th:first-child, table.data td:first-child{text-align:left}
+  table.data td{padding:6px 9px;border-bottom:1px solid #eef2f6;text-align:right}
+  table.data tr:hover td{background:#f8fafc}
+  .twrap{max-height:430px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+  .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:10.5px;color:#fff}
+  footer{padding:16px 26px 30px;font-size:11.5px;color:var(--muted);max-width:1500px;margin:0 auto}
+  .dtooltip{background:#fff;border:none;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.3);padding:9px 12px;font-size:12px;line-height:18px}
+  .dtooltip b{font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Pakistan Economic Census — District Dashboard</h1>
+    <div class="sub">Establishments &amp; employment by PSIC economic activity and unit type · Punjab, Sindh, Khyber Pakhtunkhwa, Balochistan</div>
+  </div>
+  <div class="kpis" id="kpis"></div>
+</header>
+
+<nav>
+  <button data-page="pmap" class="active">🗺️ Spatial Overview</button>
+  <button data-page="pexp">📍 Province &amp; District Explorer</button>
+  <button data-page="pins">💡 Insights &amp; Analytics</button>
+</nav>
+
+<main>
+
+<!-- ============ PAGE 1 : MAP ============ -->
+<section class="page show" id="pmap">
+  <div class="card">
+    <div class="controls">
+      <div class="ctl"><label>Dataset</label>
+        <div class="seg" id="mDataset">
+          <button data-v="psic" class="on">PSIC Activity</button><button data-v="units">Unit Type</button>
+        </div>
+      </div>
+      <div class="ctl"><label>Indicator</label><select id="mIndicator"></select></div>
+      <div class="ctl"><label>Measure</label>
+        <div class="seg" id="mMeasure">
+          <button data-v="0" class="on">No. of Firms</button><button data-v="1">Employment</button>
+        </div>
+      </div>
+      <div class="ctl"><label>Display</label>
+        <div class="seg" id="mDisplay">
+          <button data-v="abs" class="on">Absolute</button><button data-v="pct">% of District</button><button data-v="lq">Specialization (LQ)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="maprow">
+    <div class="card" style="margin-bottom:0">
+      <h3 id="mapTitle"></h3>
+      <div id="map"></div>
+      <div class="note">Thick lines = provincial boundaries. Grey districts = no data. Hover a district for details; <b>click to open its profile</b>.
+      Keamari is shown merged into West Karachi on the map (boundary file predates the split); Surab (Balochistan) has no boundary and appears in charts only.
+      Lehri &amp; Shaheed Sikandarabad polygons are reported under parent districts in the census.</div>
+    </div>
+    <div>
+      <div class="card"><h3 id="topTitle"></h3><div id="topChart" class="chart" style="height:268px"></div></div>
+      <div class="card" style="margin-bottom:0"><h3 id="botTitle"></h3><div id="botChart" class="chart" style="height:268px"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PAGE 2 : EXPLORER ============ -->
+<section class="page" id="pexp">
+  <div class="card">
+    <div class="controls">
+      <div class="ctl"><label>Province</label><select id="eProv"></select></div>
+      <div class="ctl"><label>District</label><select id="eDist"></select></div>
+      <div class="ctl"><label>Measure</label>
+        <div class="seg" id="eMeasure">
+          <button data-v="0" class="on">No. of Firms</button><button data-v="1">Employment</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="eKpis" class="cards4"></div>
+
+  <!-- province (all districts) view -->
+  <div id="eProvView">
+    <div class="grid2">
+      <div class="card"><h3 id="eRankTitle"></h3><div id="eRankChart" class="chart"></div></div>
+      <div class="card"><h3>Sector composition of each district (% share)</h3><div id="eCompChart" class="chart"></div>
+        <div class="note">Each bar sums to 100% — compare the economic structure of districts at a glance.</div></div>
+    </div>
+    <div class="card"><h3 id="eTableTitle"></h3><div class="twrap"><table class="data" id="eTable"></table></div></div>
+  </div>
+
+  <!-- single district view -->
+  <div id="eDistView" style="display:none">
+    <div class="grid2">
+      <div class="card"><h3 id="dPsicTitle"></h3><div id="dPsicChart" class="chart" style="height:520px"></div></div>
+      <div>
+        <div class="card"><h3 id="dUnitTitle"></h3><div id="dUnitChart" class="chart" style="height:520px"></div></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>Where does this district specialize? (Location Quotient vs national average)</h3>
+        <div id="dLqChart" class="chart" style="height:330px"></div>
+        <div class="note">LQ &gt; 1 = the district has proportionally more of this activity than the national average; LQ &lt; 1 = less.</div></div>
+      <div class="card"><h3 id="dTableTitle"></h3><div class="twrap" style="max-height:330px"><table class="data" id="dTable"></table></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PAGE 3 : INSIGHTS ============ -->
+<section class="page" id="pins">
+  <div class="grid2">
+    <div class="card">
+      <h3>Firms vs. employment — every district (log scales)</h3>
+      <div id="iScatter" class="chart" style="height:430px"></div>
+      <div class="note">Bubble size = average workers per establishment. Districts above the cloud generate more jobs per firm (industrial/public-sector employment); below it, micro-enterprise economies.</div>
+    </div>
+    <div class="card">
+      <h3>Economic structure by province (% of establishments)</h3>
+      <div id="iMix" class="chart" style="height:430px"></div>
+      <div class="note">Share of each PSIC section in the province's total establishments.</div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3 style="display:flex;align-items:center;gap:12px">National composition treemap
+        <span class="seg" id="iTreeDs" style="font-weight:400"><button data-v="psic" class="on">PSIC</button><button data-v="units">Unit Type</button></span>
+        <span class="seg" id="iTreeMs" style="font-weight:400"><button data-v="0" class="on">Firms</button><button data-v="1">Employment</button></span>
+      </h3>
+      <div id="iTree" class="chart" style="height:400px"></div>
+    </div>
+    <div class="card">
+      <h3 style="display:flex;align-items:center;gap:12px">Most specialized districts
+        <select id="iLqSector" style="font-weight:400"></select>
+      </h3>
+      <div id="iLq" class="chart" style="height:400px"></div>
+      <div class="note">Location Quotient of establishments — how over-represented the selected activity is relative to the national economy (districts with ≥ 5,000 establishments).</div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3>Average firm size — biggest and smallest (workers per establishment)</h3>
+      <div id="iSize" class="chart" style="height:420px"></div>
+      <div class="note">Districts with ≥ 5,000 establishments. High values signal factory/public-sector employment; low values signal shop-keeper economies.</div>
+    </div>
+    <div class="card">
+      <h3>Economic diversification index by district</h3>
+      <div id="iDiv" class="chart" style="height:420px"></div>
+      <div class="note">1 − Herfindahl index across the 21 PSIC sections (establishments). Higher = activity spread across many sectors; lower = dependent on few sectors.</div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <b>Source:</b> Pakistan Bureau of Statistics — Economic Census (district tables: establishments &amp; workforce by PSIC major category and by unit type).
+  Administrative boundaries: OCHA/COD 2022 (admin level 1 &amp; 2). Azad Kashmir, Gilgit-Baltistan and Islamabad are not included in the published district tables.
+  Totals across the four provinces: 7,056,787 establishments · 24,722,607 workers (identical in both the PSIC and unit-type tables).
+</footer>
+
+<script src="assets/leaflet.js"></script>
+<script src="assets/echarts.min.js"></script>
+<script src="data/census.js"></script>
+<script src="data/geo.js"></script>
+<script>
+'use strict';
+/* ============================ shared helpers ============================ */
+const C = window.CENSUS, D = C.districts;
+const PROVS = C.provinces;
+const PCOLOR = {'Punjab':'#1b9e77','Sindh':'#d95f02','Khyber Pakhtunkhwa':'#7570b3','Balochistan':'#e7298a'};
+const MEASURE_NAME = ['establishments','employment'];
+const MEASURE_LABEL = ['No. of establishments','Employment (workforce)'];
+const SEC_PALETTE = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ac',
+                     '#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf','#6b6ecf'];
+const fmt = n => n==null ? '—' : Math.round(n).toLocaleString('en-US');
+const fmtC = n => new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1}).format(n);
+const fmt1 = n => n==null ? '—' : (Math.round(n*100)/100).toLocaleString('en-US');
+
+function dsKeys(ds){ return Object.keys(ds==='psic'?C.sectors:C.units); }
+function dsLabel(ds,k){ return ds==='psic' ? C.sectors[k].label : C.units[k]; }
+function indLabel(ds,ind){ return ind==='total' ? (ds==='psic'?'All economic activity (total)':'All unit types (total)') : dsLabel(ds,ind); }
+
+function val(rec, ds, ind, m){
+  const t = rec[ds];
+  if(ind==='total'){ let s=0; for(const k in t) s+=t[k][m]; return s; }
+  return (t[ind]||[0,0])[m];
+}
+// national totals cache
+const NAT = {};
+function nat(ds, ind, m){
+  const key = ds+'|'+ind+'|'+m;
+  if(NAT[key]==null){ let s=0; for(const k in D) s+=val(D[k],ds,ind,m); NAT[key]=s; }
+  return NAT[key];
+}
+function lq(rec, ds, ind, m){
+  if(ind==='total') return 1;
+  const dt = val(rec,ds,'total',m), dv = val(rec,ds,ind,m);
+  const ntI = nat(ds,ind,m), ntT = nat(ds,'total',m);
+  if(!dt || !ntI) return dv>0 ? Infinity : null;
+  return (dv/dt)/(ntI/ntT);
+}
+function quantBreaks(vals, k){
+  const v = vals.filter(x=>x!=null && isFinite(x)).sort((a,b)=>a-b);
+  if(!v.length) return [];
+  const br = [];
+  for(let i=1;i<k;i++){
+    const q = v[Math.min(v.length-1, Math.floor(i*v.length/k))];
+    if(!br.length || q>br[br.length-1]) br.push(q);
+  }
+  return br;
+}
+const SEQ = ['#f7fbff','#deebf7','#c6dbef','#9ecae1','#6baed6','#4292c6','#2171b5','#084594'];
+const DIVG = ['#b2182b','#ef8a62','#fddbc7','#f7f7f7','#d1e5f0','#67a9cf','#2166ac'].slice().reverse(); // low→red? we want high LQ = dark blue
+function colorFor(v, breaks, colors){
+  if(v==null || !isFinite(v)) return null;
+  let i=0; while(i<breaks.length && v>breaks[i]) i++;
+  return colors[Math.min(i, colors.length-1)];
+}
+const barTip = { trigger:'axis', axisPointer:{type:'shadow'}, confine:true };
+function hbar(el, names, values, colors, valueFmt, opts={}){
+  const ch = echarts.getInstanceByDom(el) || echarts.init(el);
+  ch.setOption({
+    grid:{left:6,right:52,top:6,bottom:6,containLabel:true},
+    tooltip:{...barTip, valueFormatter:v=>valueFmt(v)},
+    xAxis:{type:'value',axisLabel:{formatter:v=>fmtC(v)},splitLine:{lineStyle:{color:'#eef2f6'}}},
+    yAxis:{type:'category',data:names,inverse:true,axisLabel:{fontSize:11,width:150,overflow:'truncate'}},
+    series:[{type:'bar',data:values.map((v,i)=>({value:v,itemStyle:{color:colors[i]}})),
+             barMaxWidth:17,label:{show:true,position:'right',fontSize:10.5,formatter:p=>valueFmt(p.value)}}],
+    ...opts
+  }, true);
+  return ch;
+}
+const CH = []; // charts to resize
+function reg(ch){ if(!CH.includes(ch)) CH.push(ch); return ch; }
+
+/* ============================ header KPIs ============================ */
+(function(){
+  const e = nat('psic','total',0), w = nat('psic','total',1);
+  const nd = Object.keys(D).length;
+  document.getElementById('kpis').innerHTML =
+    `<div class="kpi"><div class="v">${fmt(e)}</div><div class="l">Establishments</div></div>
+     <div class="kpi"><div class="v">${fmt(w)}</div><div class="l">Persons engaged</div></div>
+     <div class="kpi"><div class="v">${(w/e).toFixed(1)}</div><div class="l">Workers / firm</div></div>
+     <div class="kpi"><div class="v">${nd}</div><div class="l">Districts</div></div>`;
+})();
+
+/* ============================ segmented control ============================ */
+function segInit(id, onChange){
+  const box = document.getElementById(id);
+  box.addEventListener('click', ev=>{
+    const b = ev.target.closest('button'); if(!b) return;
+    box.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    onChange(b.dataset.v);
+  });
+  return () => box.querySelector('button.on').dataset.v;
+}
+
+/* ============================ PAGE 1 — map ============================ */
+const M = { ds:'psic', ind:'total', m:0, disp:'abs' };
+const mIndSel = document.getElementById('mIndicator');
+function fillIndicator(){
+  const opts = ['<option value="total">'+indLabel(M.ds,'total')+'</option>']
+    .concat(dsKeys(M.ds).map(k=>`<option value="${k}">${dsLabel(M.ds,k)}${M.ds==='psic'?' ('+C.sectors[k].psic+')':''}</option>`));
+  mIndSel.innerHTML = opts.join('');
+  mIndSel.value='total';
+  M.ind='total';
+}
+fillIndicator();
+mIndSel.addEventListener('change', ()=>{ M.ind = mIndSel.value; renderMapPage(); });
+segInit('mDataset', v=>{ M.ds=v; fillIndicator(); renderMapPage(); });
+segInit('mMeasure', v=>{ M.m=+v; renderMapPage(); });
+segInit('mDisplay', v=>{ M.disp=v; renderMapPage(); });
+
+const map = L.map('map',{zoomSnap:.25, attributionControl:false}).setView([30.2,69.4],5.4);
+// province context fill (all provinces incl. AJK/GB/ISB)
+L.geoJSON(window.GEO_PROVINCES,{style:{color:'#b6c2cc',weight:1,fillColor:'#eceff3',fillOpacity:1},interactive:false}).addTo(map);
+let distLayer=null;
+const provLine = L.geoJSON(window.GEO_PROVINCES,{style:{color:'#22303c',weight:2.1,fill:false},interactive:false});
+const legendCtl = L.control({position:'bottomleft'});
+let legendDiv=null;
+legendCtl.onAdd=function(){ legendDiv=L.DomUtil.create('div','legend'); return legendDiv; };
+legendCtl.addTo(map);
+
+function mapValue(name){
+  // value used to paint polygon `name` (merges Keamari into West Karachi)
+  let rec = D[name];
+  if(!rec) return {v:null, note:'No census data — reported under parent district'};
+  let get = (r)=> M.disp==='lq' ? lq(r,M.ds,M.ind,M.m)
+           : M.disp==='pct' ? (val(r,M.ds,'total',M.m) ? 100*val(r,M.ds,M.ind,M.m)/val(r,M.ds,'total',M.m) : null)
+           : val(r,M.ds,M.ind,M.m);
+  let note='';
+  for(const src in C.merge_into){
+    if(C.merge_into[src]===name){
+      note = 'Includes '+src+' (post-split district)';
+      if(M.disp==='abs') return {v: val(rec,M.ds,M.ind,M.m)+val(D[src],M.ds,M.ind,M.m), note};
+      // for pct / lq merge the underlying counts
+      const comb = {psic:{},units:{}};
+      for(const dsn of ['psic','units']){
+        for(const k in rec[dsn]) comb[dsn][k]=[rec[dsn][k][0]+ (D[src][dsn][k]||[0,0])[0], rec[dsn][k][1]+(D[src][dsn][k]||[0,0])[1]];
+      }
+      return {v:get(comb), note};
+    }
+  }
+  return {v:get(rec), note};
+}
+
+function displayFmt(v){
+  if(v==null||!isFinite(v)) return '—';
+  return M.disp==='abs' ? fmt(v) : M.disp==='pct' ? fmt1(v)+' %' : fmt1(v)+'×';
+}
+
+function renderMapPage(){
+  const dispDisabled = M.ind==='total' && M.disp!=='abs';
+  if(dispDisabled){ // % / LQ meaningless for totals — snap back to absolute
+    document.querySelectorAll('#mDisplay button').forEach(b=>b.classList.toggle('on', b.dataset.v==='abs'));
+    M.disp='abs';
+  }
+  // ---- values for polygons
+  const feats = window.GEO_DISTRICTS.features;
+  const painted = feats.map(f=>({f, ...mapValue(f.properties.n)}));
+  const vals = painted.map(p=>p.v);
+  const colors = M.disp==='lq' ? ['#a50f15','#ef6548','#fdd0a2','#f7f7f7','#c6dbef','#6baed6','#2171b5','#08306b'] : SEQ;
+  const breaks = M.disp==='lq' ? [0.25,0.5,0.8,1.25,2,4,8] : quantBreaks(vals, colors.length);
+  if(distLayer) map.removeLayer(distLayer);
+  distLayer = L.geoJSON({type:'FeatureCollection',features:feats},{
+    style: f=>{
+      const p = painted.find(x=>x.f===f);
+      const col = colorFor(p.v, breaks, colors);
+      return {color:'#7d8b98', weight:.7, fillColor: col||'#d7dde3', fillOpacity: col?0.92:0.55};
+    },
+    onEachFeature:(f,l)=>{
+      const p = painted.find(x=>x.f===f);
+      const name = f.properties.n, prov = f.properties.p;
+      // rank among painted values
+      let html = `<b>${name}</b> <span style="color:${PCOLOR[prov]}">${prov}</span><br>`;
+      html += `${indLabel(M.ds,M.ind)}<br><b>${displayFmt(p.v)}</b> ${M.disp==='abs'?MEASURE_NAME[M.m]:M.disp==='pct'?'of district '+MEASURE_NAME[M.m]:'location quotient'}`;
+      if(p.v!=null && M.disp==='abs'){
+        const sorted = vals.filter(x=>x!=null).sort((a,b)=>b-a);
+        html += `<br>Rank ${sorted.indexOf(p.v)+1} of ${sorted.length} mapped districts`;
+        const nt = nat(M.ds,M.ind,M.m);
+        if(nt) html += ` · ${(100*p.v/nt).toFixed(2)}% of national`;
+      }
+      if(p.note) html += `<br><i>${p.note}</i>`;
+      l.bindTooltip(html,{sticky:true,className:'dtooltip'});
+      l.on('mouseover',()=>l.setStyle({weight:2.2,color:'#0f172a'}));
+      l.on('mouseout',()=>distLayer.resetStyle(l));
+      if(D[name]) l.on('click',()=>openDistrict(name));
+    }
+  }).addTo(map);
+  provLine.remove(); provLine.addTo(map);
+  // ---- legend
+  let rows='';
+  const lo = Math.min(...vals.filter(x=>x!=null&&isFinite(x)));
+  let prev = M.disp==='lq' ? 0 : lo;
+  for(let i=0;i<colors.length;i++){
+    const hi = i<breaks.length ? breaks[i] : null;
+    const lab = hi==null ? '&gt; '+(M.disp==='abs'?fmtC(prev):fmt1(prev)) :
+        (M.disp==='abs'? fmtC(prev)+' – '+fmtC(hi) : fmt1(prev)+' – '+fmt1(hi));
+    rows += `<div><i style="background:${colors[i]}"></i>${lab}</div>`;
+    prev = hi;
+    if(hi==null) break;
+  }
+  rows += `<div><i style="background:#d7dde3"></i>No data</div>`;
+  legendDiv.innerHTML = `<b>${M.disp==='abs'?MEASURE_LABEL[M.m]:M.disp==='pct'?'% of district total':'Location quotient'}</b>${rows}`;
+  document.getElementById('mapTitle').textContent =
+    `${indLabel(M.ds,M.ind)} — ${M.disp==='abs'?MEASURE_LABEL[M.m].toLowerCase():M.disp==='pct'?'share of district '+MEASURE_NAME[M.m]:'specialization (LQ, '+MEASURE_NAME[M.m]+')'}`;
+  renderTopBottom();
+}
+
+function renderTopBottom(){
+  // ranks use true district records (Keamari & West Karachi separate)
+  const arr = Object.keys(D).map(k=>{
+    const r=D[k];
+    const v = M.disp==='lq' ? lq(r,M.ds,M.ind,M.m)
+           : M.disp==='pct' ? (val(r,M.ds,'total',M.m) ? 100*val(r,M.ds,M.ind,M.m)/val(r,M.ds,'total',M.m) : 0)
+           : val(r,M.ds,M.ind,M.m);
+    return {name:k, prov:r.province, v: (v==null||!isFinite(v))?0:v};
+  }).sort((a,b)=>b.v-a.v);
+  const unit = M.disp==='abs' ? '' : M.disp==='pct' ? ' %' : '×';
+  const vf = v => (M.disp==='abs'?fmtC(v):fmt1(v))+unit;
+  const top = arr.slice(0,10), bot = arr.slice(-10).reverse();
+  document.getElementById('topTitle').textContent = 'Top 10 districts — '+indLabel(M.ds,M.ind);
+  document.getElementById('botTitle').textContent = 'Bottom 10 districts — '+indLabel(M.ds,M.ind);
+  reg(hbar(document.getElementById('topChart'), top.map(x=>x.name), top.map(x=>x.v), top.map(x=>PCOLOR[x.prov]), vf));
+  reg(hbar(document.getElementById('botChart'), bot.map(x=>x.name), bot.map(x=>x.v), bot.map(x=>PCOLOR[x.prov]), vf));
+}
+
+/* ============================ PAGE 2 — explorer ============================ */
+const E = { prov:'Punjab', dist:'', m:0 };
+const eProv = document.getElementById('eProv'), eDist = document.getElementById('eDist');
+eProv.innerHTML = PROVS.map(p=>`<option>${p}</option>`).join('');
+function fillDistricts(){
+  const ds = Object.keys(D).filter(k=>D[k].province===E.prov).sort();
+  eDist.innerHTML = '<option value="">— All districts —</option>'+ds.map(d=>`<option>${d}</option>`).join('');
+  eDist.value = E.dist && D[E.dist] && D[E.dist].province===E.prov ? E.dist : '';
+  E.dist = eDist.value;
+}
+fillDistricts();
+eProv.addEventListener('change',()=>{ E.prov=eProv.value; E.dist=''; fillDistricts(); renderExplorer(); });
+eDist.addEventListener('change',()=>{ E.dist=eDist.value; renderExplorer(); });
+segInit('eMeasure', v=>{ E.m=+v; renderExplorer(); });
+
+function openDistrict(name){
+  E.prov = D[name].province; E.dist = name;
+  eProv.value = E.prov; fillDistricts(); eDist.value=name; E.dist=name;
+  showPage('pexp'); renderExplorer();
+}
+
+function topSector(rec,m){
+  let best=null,bv=-1;
+  for(const k in rec.psic) if(rec.psic[k][m]>bv){bv=rec.psic[k][m];best=k;}
+  return best;
+}
+
+function renderExplorer(){
+  const provView = document.getElementById('eProvView'), distView = document.getElementById('eDistView');
+  if(E.dist){ provView.style.display='none'; distView.style.display='block'; renderDistrict(); }
+  else { provView.style.display='block'; distView.style.display='none'; renderProvince(); }
+}
+
+function renderProvince(){
+  const ks = Object.keys(D).filter(k=>D[k].province===E.prov);
+  const te = ks.reduce((s,k)=>s+val(D[k],'psic','total',0),0);
+  const tw = ks.reduce((s,k)=>s+val(D[k],'psic','total',1),0);
+  const natE = nat('psic','total',0), natW = nat('psic','total',1);
+  const sorted = ks.map(k=>({k, v:val(D[k],'psic','total',E.m)})).sort((a,b)=>b.v-a.v);
+  document.getElementById('eKpis').innerHTML = `
+    <div class="stat"><div class="v">${fmt(te)}</div><div class="l">Establishments (${(100*te/natE).toFixed(1)}% of national)</div></div>
+    <div class="stat"><div class="v">${fmt(tw)}</div><div class="l">Employment (${(100*tw/natW).toFixed(1)}% of national)</div></div>
+    <div class="stat"><div class="v">${(tw/te).toFixed(1)}</div><div class="l">Avg. workers per establishment</div></div>
+    <div class="stat"><div class="v">${ks.length}</div><div class="l">Districts</div></div>
+    <div class="stat"><div class="v" style="font-size:16px">${sorted[0].k}</div><div class="l">Largest district by ${MEASURE_NAME[E.m]} (${fmtC(sorted[0].v)})</div></div>`;
+
+  // ranking bar (all districts)
+  document.getElementById('eRankTitle').textContent = `All districts of ${E.prov} — ${MEASURE_LABEL[E.m].toLowerCase()}`;
+  const rEl = document.getElementById('eRankChart');
+  rEl.style.height = Math.max(320, sorted.length*21+50)+'px';
+  reg(hbar(rEl, sorted.map(x=>x.k), sorted.map(x=>x.v), sorted.map(()=>PCOLOR[E.prov]), fmtC));
+
+  // composition 100% stacked
+  const cEl = document.getElementById('eCompChart');
+  cEl.style.height = rEl.style.height;
+  const secKeys = dsKeys('psic');
+  const series = secKeys.map((sk,i)=>({
+    name:C.sectors[sk].label, type:'bar', stack:'t',
+    itemStyle:{color:SEC_PALETTE[i%SEC_PALETTE.length]},
+    emphasis:{focus:'series'},
+    data: sorted.map(x=>{
+      const tot = val(D[x.k],'psic','total',E.m);
+      return tot? +(100*val(D[x.k],'psic',sk,E.m)/tot).toFixed(2) : 0;
+    })
+  }));
+  const ch = echarts.getInstanceByDom(cEl)||echarts.init(cEl);
+  ch.setOption({
+    grid:{left:6,right:14,top:6,bottom:34,containLabel:true},
+    tooltip:{trigger:'item',confine:true,formatter:p=>`<b>${p.name}</b><br>${p.marker}${p.seriesName}: <b>${p.value}%</b>`},
+    legend:{type:'scroll',bottom:0,itemWidth:11,itemHeight:11,textStyle:{fontSize:10.5}},
+    xAxis:{type:'value',max:100,axisLabel:{formatter:'{value}%'}},
+    yAxis:{type:'category',data:sorted.map(x=>x.k),inverse:true,axisLabel:{fontSize:11,width:150,overflow:'truncate'}},
+    series
+  },true);
+  reg(ch);
+
+  // table
+  document.getElementById('eTableTitle').textContent = `District summary table — ${E.prov}`;
+  const rows = sorted.map((x,i)=>{
+    const r=D[x.k], e=val(r,'psic','total',0), w=val(r,'psic','total',1);
+    const ts = topSector(r,E.m);
+    return `<tr><td>${i+1}. <b style="cursor:pointer;color:var(--accent)" onclick="openDistrict('${x.k}')">${x.k}</b>${r.geo?'':' *'}</td>
+      <td>${fmt(e)}</td><td>${fmt(w)}</td><td>${(w/e).toFixed(1)}</td>
+      <td>${(100*e/te).toFixed(1)}%</td><td style="text-align:left">${C.sectors[ts].label}</td></tr>`;
+  }).join('');
+  document.getElementById('eTable').innerHTML =
+    `<thead><tr><th>District</th><th>Establishments</th><th>Employment</th><th>Workers/firm</th><th>Share of province</th><th style="text-align:left">Largest sector</th></tr></thead><tbody>${rows}</tbody>`;
+}
+
+function renderDistrict(){
+  const r = D[E.dist];
+  const e = val(r,'psic','total',0), w = val(r,'psic','total',1);
+  const provKs = Object.keys(D).filter(k=>D[k].province===E.prov);
+  const pe = provKs.reduce((s,k)=>s+val(D[k],'psic','total',0),0);
+  const allSorted = Object.keys(D).map(k=>val(D[k],'psic','total',E.m)).sort((a,b)=>b-a);
+  const provSorted = provKs.map(k=>val(D[k],'psic','total',E.m)).sort((a,b)=>b-a);
+  const mine = val(r,'psic','total',E.m);
+  let noteHtml = '';
+  if(!r.geo && C.no_geo_note[E.dist]) noteHtml = `<div class="stat"><div class="v" style="font-size:13px">ⓘ</div><div class="l">${C.no_geo_note[E.dist]}</div></div>`;
+  document.getElementById('eKpis').innerHTML = `
+    <div class="stat"><div class="v">${fmt(e)}</div><div class="l">Establishments</div></div>
+    <div class="stat"><div class="v">${fmt(w)}</div><div class="l">Employment</div></div>
+    <div class="stat"><div class="v">${(w/e).toFixed(1)}</div><div class="l">Avg. workers per establishment</div></div>
+    <div class="stat"><div class="v">#${provSorted.indexOf(mine)+1} / ${provKs.length}</div><div class="l">Rank in ${E.prov} (${MEASURE_NAME[E.m]})</div></div>
+    <div class="stat"><div class="v">#${allSorted.indexOf(mine)+1} / ${allSorted.length}</div><div class="l">National rank · ${(100*e/pe).toFixed(1)}% of province firms</div></div>${noteHtml}`;
+
+  // PSIC bar
+  document.getElementById('dPsicTitle').textContent = `${E.dist} — ${MEASURE_LABEL[E.m].toLowerCase()} by economic activity (PSIC)`;
+  const ps = dsKeys('psic').map(k=>({k, lab:C.sectors[k].label, v:val(r,'psic',k,E.m)})).sort((a,b)=>b.v-a.v);
+  reg(hbar(document.getElementById('dPsicChart'), ps.map(x=>x.lab), ps.map(x=>x.v), ps.map((x,i)=>SEC_PALETTE[dsKeys('psic').indexOf(x.k)%SEC_PALETTE.length]), fmtC));
+
+  // unit type bar
+  document.getElementById('dUnitTitle').textContent = `${E.dist} — ${MEASURE_LABEL[E.m].toLowerCase()} by unit type`;
+  const us = dsKeys('units').map(k=>({lab:C.units[k], v:val(r,'units',k,E.m)})).sort((a,b)=>b.v-a.v);
+  reg(hbar(document.getElementById('dUnitChart'), us.map(x=>x.lab), us.map(x=>x.v), us.map(()=>PCOLOR[E.prov]), fmtC));
+
+  // LQ chart
+  const lqs = dsKeys('psic').map(k=>({lab:C.sectors[k].label, v:lq(r,'psic',k,E.m)}))
+      .filter(x=>x.v!=null && isFinite(x.v) && val(r,'psic','total',E.m)>0)
+      .sort((a,b)=>b.v-a.v);
+  const lqTop = lqs.slice(0,6), lqBot = lqs.slice(-4).reverse();
+  const lqData = lqTop.concat([{lab:'⋯',v:null}], lqBot);
+  const lEl = document.getElementById('dLqChart');
+  const lch = echarts.getInstanceByDom(lEl)||echarts.init(lEl);
+  lch.setOption({
+    grid:{left:6,right:56,top:6,bottom:24,containLabel:true},
+    tooltip:{...barTip, valueFormatter:v=>v==null?'—':fmt1(v)+'×'},
+    xAxis:{type:'value',axisLabel:{formatter:v=>v+'×'},splitLine:{lineStyle:{color:'#eef2f6'}}},
+    yAxis:{type:'category',inverse:true,data:lqData.map(x=>x.lab),axisLabel:{fontSize:11,width:170,overflow:'truncate'}},
+    series:[{type:'bar',barMaxWidth:15,
+      data:lqData.map(x=>({value:x.v==null?0:+x.v.toFixed(2), itemStyle:{color:x.v==null?'#fff':x.v>=1?'#2171b5':'#ef6548'}})),
+      label:{show:true,position:'right',fontSize:10.5,formatter:p=>p.value?p.value+'×':''},
+      markLine:{symbol:'none',silent:true,lineStyle:{color:'#94a3b8',type:'dashed'},label:{formatter:'national avg (1×)',fontSize:10},data:[{xAxis:1}]}
+    }]
+  },true);
+  reg(lch);
+
+  // table
+  document.getElementById('dTableTitle').textContent = `${E.dist} — full breakdown`;
+  let rows = `<tr><td colspan="5" style="text-align:left;background:#f8fafc"><b>By PSIC economic activity</b></td></tr>`;
+  rows += dsKeys('psic').map(k=>{
+    const [ee,ww]=[val(r,'psic',k,0),val(r,'psic',k,1)];
+    const L = lq(r,'psic',k,0);
+    return `<tr><td>${C.sectors[k].label} <span style="color:var(--muted)">(${C.sectors[k].psic})</span></td>
+      <td>${fmt(ee)}</td><td>${fmt(ww)}</td><td>${e?(100*ee/e).toFixed(1)+'%':'—'}</td><td>${L==null||!isFinite(L)?'—':fmt1(L)+'×'}</td></tr>`;
+  }).join('');
+  rows += `<tr><td colspan="5" style="text-align:left;background:#f8fafc"><b>By unit type</b></td></tr>`;
+  rows += dsKeys('units').map(k=>{
+    const [ee,ww]=[val(r,'units',k,0),val(r,'units',k,1)];
+    return `<tr><td>${C.units[k]}</td><td>${fmt(ee)}</td><td>${fmt(ww)}</td><td>${e?(100*ee/e).toFixed(1)+'%':'—'}</td><td>—</td></tr>`;
+  }).join('');
+  document.getElementById('dTable').innerHTML =
+    `<thead><tr><th>Category</th><th>Establishments</th><th>Employment</th><th>% of firms</th><th>LQ</th></tr></thead><tbody>${rows}</tbody>`;
+}
+
+/* ============================ PAGE 3 — insights ============================ */
+let insightsDone=false;
+const IT = { ds:'psic', m:0 };
+segInit('iTreeDs', v=>{ IT.ds=v; renderTree(); });
+segInit('iTreeMs', v=>{ IT.m=+v; renderTree(); });
+const iLqSel = document.getElementById('iLqSector');
+iLqSel.innerHTML = dsKeys('psic').map(k=>`<option value="${k}">${C.sectors[k].label}</option>`).join('');
+iLqSel.value='3';
+iLqSel.addEventListener('change', renderILq);
+
+function renderInsights(){
+  if(insightsDone) { CH.forEach(c=>c.resize()); return; }
+  insightsDone=true;
+  // ---- scatter
+  const sEl=document.getElementById('iScatter');
+  const sch=echarts.init(sEl);
+  const series = PROVS.map(p=>({
+    name:p, type:'scatter',
+    itemStyle:{color:PCOLOR[p],opacity:.8},
+    data: Object.keys(D).filter(k=>D[k].province===p).map(k=>{
+      const e=val(D[k],'psic','total',0), w=val(D[k],'psic','total',1);
+      return {name:k, value:[e,w], symbolSize: Math.max(5, Math.sqrt(w/Math.max(e,1))*7)};
+    })
+  }));
+  sch.setOption({
+    tooltip:{confine:true, formatter:p=>`<b>${p.data.name}</b> (${p.seriesName})<br>Firms: <b>${fmt(p.value[0])}</b><br>Employment: <b>${fmt(p.value[1])}</b><br>Workers/firm: <b>${(p.value[1]/p.value[0]).toFixed(1)}</b>`},
+    legend:{bottom:0},
+    grid:{left:10,right:24,top:14,bottom:36,containLabel:true},
+    xAxis:{type:'log',name:'establishments',nameLocation:'middle',nameGap:26,axisLabel:{formatter:v=>fmtC(v)}},
+    yAxis:{type:'log',name:'employment',axisLabel:{formatter:v=>fmtC(v)}},
+    series
+  });
+  reg(sch);
+  // ---- province mix
+  const mEl=document.getElementById('iMix');
+  const mch=echarts.init(mEl);
+  const secKeys=dsKeys('psic');
+  const provTot = {}; PROVS.forEach(p=>{provTot[p]=Object.keys(D).filter(k=>D[k].province===p).reduce((s,k)=>s+val(D[k],'psic','total',0),0);});
+  mch.setOption({
+    grid:{left:8,right:16,top:8,bottom:64,containLabel:true},
+    tooltip:{trigger:'item',confine:true,formatter:p=>`<b>${p.name}</b><br>${p.marker}${p.seriesName}: <b>${p.value}%</b>`},
+    legend:{type:'scroll',bottom:0,itemWidth:11,itemHeight:11,textStyle:{fontSize:10.5}},
+    xAxis:{type:'value',max:100,axisLabel:{formatter:'{value}%'}},
+    yAxis:{type:'category',data:PROVS,inverse:true,axisLabel:{fontSize:12}},
+    series: secKeys.map((sk,i)=>({
+      name:C.sectors[sk].label,type:'bar',stack:'t',itemStyle:{color:SEC_PALETTE[i%SEC_PALETTE.length]},emphasis:{focus:'series'},
+      data:PROVS.map(p=>{
+        const v = Object.keys(D).filter(k=>D[k].province===p).reduce((s,k)=>s+val(D[k],'psic',sk,0),0);
+        return +(100*v/provTot[p]).toFixed(2);
+      })
+    }))
+  });
+  reg(mch);
+  renderTree(); renderILq(); renderSize(); renderDiv();
+}
+
+function renderTree(){
+  const el=document.getElementById('iTree');
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el);
+  const keys=dsKeys(IT.ds);
+  const data=keys.map((k,i)=>({name:dsLabel(IT.ds,k), value:nat(IT.ds,k,IT.m), itemStyle:{color:SEC_PALETTE[i%SEC_PALETTE.length]}}))
+      .filter(x=>x.value>0);
+  const tot=data.reduce((s,x)=>s+x.value,0);
+  ch.setOption({
+    tooltip:{confine:true,formatter:p=>`<b>${p.name}</b><br>${fmt(p.value)} ${MEASURE_NAME[IT.m]}<br>${(100*p.value/tot).toFixed(1)}% of total`},
+    series:[{type:'treemap',roam:false,nodeClick:false,breadcrumb:{show:false},
+      label:{formatter:p=>p.name+'\n'+(100*p.value/tot).toFixed(1)+'%',fontSize:11},
+      itemStyle:{borderColor:'#fff',borderWidth:1.5}, data}]
+  },true);
+  reg(ch);
+}
+
+function renderILq(){
+  const sk=iLqSel.value;
+  const arr=Object.keys(D).filter(k=>val(D[k],'psic','total',0)>=5000)
+    .map(k=>({name:k, prov:D[k].province, v:lq(D[k],'psic',sk,0)}))
+    .filter(x=>x.v!=null&&isFinite(x.v)).sort((a,b)=>b.v-a.v).slice(0,15);
+  reg(hbar(document.getElementById('iLq'), arr.map(x=>x.name), arr.map(x=>+x.v.toFixed(2)), arr.map(x=>PCOLOR[x.prov]), v=>fmt1(v)+'×'));
+}
+
+function renderSize(){
+  const arr=Object.keys(D).filter(k=>val(D[k],'psic','total',0)>=5000)
+    .map(k=>({name:k, prov:D[k].province, v:val(D[k],'psic','total',1)/val(D[k],'psic','total',0)}))
+    .sort((a,b)=>b.v-a.v);
+  const rows=arr.slice(0,10).concat(arr.slice(-10));
+  reg(hbar(document.getElementById('iSize'), rows.map(x=>x.name), rows.map(x=>+x.v.toFixed(2)), rows.map(x=>PCOLOR[x.prov]), v=>fmt1(v)));
+}
+
+function renderDiv(){
+  const arr=Object.keys(D).map(k=>{
+    const r=D[k], t=val(r,'psic','total',0);
+    if(t<1000) return null;
+    let h=0; for(const s in r.psic){ const sh=r.psic[s][0]/t; h+=sh*sh; }
+    return {name:k, prov:r.province, v:1-h};
+  }).filter(Boolean).sort((a,b)=>b.v-a.v);
+  const rows=arr.slice(0,10).concat(arr.slice(-10));
+  reg(hbar(document.getElementById('iDiv'), rows.map(x=>x.name), rows.map(x=>+x.v.toFixed(3)), rows.map(x=>PCOLOR[x.prov]), v=>fmt1(v)));
+}
+
+/* ============================ tabs ============================ */
+function showPage(id){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.page===id));
+  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('show', p.id===id));
+  if(id==='pmap'){ map.invalidateSize(); }
+  if(id==='pins'){ renderInsights(); }
+  requestAnimationFrame(()=>CH.forEach(c=>c.resize()));
+}
+document.querySelector('nav').addEventListener('click',ev=>{
+  const b=ev.target.closest('button'); if(b) showPage(b.dataset.page);
+});
+window.addEventListener('resize',()=>{ CH.forEach(c=>c.resize()); });
+
+/* init */
+renderMapPage();
+renderExplorer();
+</script>
+</body>
+</html>
