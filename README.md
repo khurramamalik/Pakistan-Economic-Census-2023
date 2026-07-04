@@ -6,7 +6,7 @@ Administrative boundaries: OCHA/COD 2022 (admin level 1 & 2). Azad Kashmir, Gilg
 
 Pakistan Economic Census contains district tables for establishments & workforce by PSIC major category and by unit type
 
-Number of economic establishments and employment by Pakistan Standard Industrial Classifications are in PSIC.csv, which contains cleaned data by province and district for further analysis by researchers. 
+Number of economic establishments and employment by Pakistan Standard Industrial Classifications are in PSIC Number.csv and PSIC Employment.csv, respectively, which contains cleaned data by province and district for further analysis by researchers. 
 
 It has following categories for all districts:
 Agriculture (01-03)
