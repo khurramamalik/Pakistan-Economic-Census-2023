@@ -28,5 +28,31 @@ Education (85)
 Health (86-88)
 Arts (90-93)
 Other services (94-96)
+
+Number of economic establishments and employment by Unit Type by Economic Activity are in Unit Type Number.csv and Unit Type Employment.csv, respectively, which contains cleaned data by province and district for further analysis by researchers. 
+
+It has following categories for all districts:
+Old homes/Orphanage
+Hostel
+Hotel
+Hospital/Health Est.
+Maddrasa
+School
+College
+University
+Masjid
+Shop Retail
+Shop Wholesale
+Shop Service
+Shop Production
+Factory
+Semi Govt. Office
+Govt. Office
+Post Office
+Bank
+Police Station
+Cattle Farming
+Others
+
 Extraterritorial (99)
 Others
